@@ -13,26 +13,23 @@ from configparser import ConfigParser
 from datetime import datetime
 from getopt import getopt
 from time import time, sleep
-
 import pytz
 import telethon
 from telethon import events
 
-
 # region Переменные 1
-
 # читаем/создаём конфиг при первом запуске
 need2readconfig = True
 # имя замка
-castle_name = None
+castle_name = 'night'
 # включить прокачку при левелапе
 lvl_up = 'lvl_off'
 # сколько голды оставлять на руках после автодоната
 gold_to_left = 0
 # username игрового бота
-bot_username = 'ChatWarsClassicBot'
+bot_username = 'ChatWarsBot'
 # username бота сбора статистики
-stat_bot = 'CWRedCastleBot'
+stat_bot = 'CWCastleBot'
 # трейдобот
 trade_bot = 'ChatWarsTradeBot'
 # стокобот Капибара
@@ -74,20 +71,20 @@ for opt, arg in opts:
 # endregion
 
 # region Конфиг подключения к Телеге
-CONFIG_PATH = my_username+'_tg_connect.json'
+CONFIG_PATH = my_username + '_tg_connect.json'
 with open(CONFIG_PATH) as f:
     CONFIG = json.load(f)
 # endregion
 
 # region Переменные 2 (словари)
 orders = {
-    'red': '🇮🇲',
-    'black': '🇬🇵',
-    'white': '🇨🇾',
-    'yellow': '🇻🇦',
-    'blue': '🇪🇺',
-    'mint': '🇲🇴',
-    'twilight': '🇰🇮',
+    'turtles': '🐢',
+    'klever': '☘️',
+    'rock': '🖤',
+    'farm': '🍆',
+    'fall': '🍁',
+    'rose': '🌹',
+    'night': '🦇',
     'lesnoi_fort': '🌲Лесной форт',
     'les': '🌲Лес',
     'gorni_fort': '⛰Горный форт',
@@ -99,7 +96,7 @@ orders = {
     'hero': '🏅Герой',
     'corovan': '/go',
     'peshera': '🕸Пещера',
-    'quests': '🗺 Квесты',
+    'quests': '🗺Квесты',
     'castle_menu': '🏰Замок',
     'lavka': '🏚Лавка',
     'snaraga': 'Снаряжение',
@@ -111,7 +108,8 @@ orders = {
     'more': '🏝Побережье',
     'pet_play': '⚽Поиграть',
     'pet_feed': '🍼Покормить',
-    'pet_wash': '🛁Почистить'
+    'pet_wash': '🛁Почистить',
+    'attack_symbol': '⚔'
 }
 
 builds = {
@@ -137,13 +135,13 @@ builds = {
 }
 
 flags = {
-    '🇪🇺': 'blue',
-    '🇮🇲': 'red',
-    '🇬🇵': 'black',
-    '🇻🇦': 'yellow',
-    '🇨🇾': 'white',
-    '🇰🇮': 'twilight',
-    '🇲🇴': 'mint',
+    '🍁': 'fall',
+    '🐢': 'turtles',
+    '☘️': 'klever',
+    '🍆': 'farm',
+    '🖤': 'rock',
+    '🦇': 'night',
+    '🌹': 'rose',
 }
 
 pet_states = {
@@ -161,21 +159,11 @@ pet_char_states = {
     'очень плохо': 1
 }
 
-castles = {
-    'red': '🇮🇲Красный замок',
-    'black': '🇬🇵Черный замок',
-    'white': '🇨🇾Белый замок',
-    'yellow': '🇻🇦Желтый замок',
-    'blue': '🇪🇺Синий замок',
-    'mint': '🇲🇴Мятный замок',
-    'twilight': '🇰🇮Сумрачный замок',
-}
-
 arena_cover = ['🛡головы', '🛡корпуса', '🛡ног']
 arena_attack = ['🗡в голову', '🗡по корпусу', '🗡по ногам']
 
 # ничо не менять, все подхватится само
-castle = orders['red']
+castle = orders['night']
 # текущий приказ на атаку/защиту, по умолчанию всегда защита, трогать не нужно
 current_order = {'time': 0, 'order': castle}
 
@@ -187,7 +175,6 @@ else:
     pref = ''
     msg_receiver = group_name
 
-
 action_list = deque([])
 log_list = deque([], maxlen=30)
 lt_arena = 0
@@ -198,7 +185,7 @@ last_captcha_id = 0
 last_pet_play = 0
 
 bot_enabled = True
-arena_enabled = True
+arena_enabled = False
 les_enabled = True
 peshera_enabled = False
 more_enabled = False
@@ -207,7 +194,7 @@ order_enabled = True
 auto_def_enabled = True
 donate_enabled = False
 quest_fight_enabled = True
-build_enabled = True
+build_enabled = False
 build_target = '/repair_wall'
 castle_gold = 1
 secondstock_enabled = False
@@ -229,6 +216,8 @@ arena_running = False
 arena_delay = False
 arena_delay_day = -1
 tz = pytz.timezone('Europe/Moscow')
+
+
 # endregion (ckjdfhb)
 
 
@@ -237,11 +226,11 @@ def connect(username, api, tghash):
 
     log('Connecting to telegram...')
     client = telethon.TelegramClient(username, api, tghash,
-                                     connection_mode=telethon.ConnectionMode.TCP_FULL,
+                                     #                                 connection_mode=telethon.ConnectionMode.TCP_FULL,
                                      timeout=86400,
-                                     proxy=(socks.SOCKS5, 'de51.fri-gate0.biz', 1080),
+                                     #                                 proxy=(socks.SOCKS5, 'de51.fri-gate0.biz', 1080),
                                      update_workers=1, spawn_read_thread=False)
-
+    # client = telethon.TelegramClient(username, api, tghash)
     # proxy (`tuple` | `dict`, optional):
     #             A tuple consisting of ``(socks.SOCKS5, 'host', port)``.
     #             See https://github.com/Anorov/PySocks#usage-1 for more.
@@ -292,7 +281,7 @@ def queue_worker():
             if len(action_list):
                 log('Отправляем ' + action_list[0])
                 client.send_message(bot_username, action_list.popleft())
-            sleep_time = random.randint(3, 6)
+            sleep_time = random.randint(5, 10)
             # log("Pause {0} sec".format(sleep_time))
             sleep(sleep_time)
         except Exception as err:
@@ -447,7 +436,6 @@ def parse_text(text, username, message_id, sender):
     global non_arena_item_id
     global trade_active
     global report_message_id
-    global castles
     global secondstock_enabled
     global castle_gold
 
@@ -490,6 +478,12 @@ def parse_text(text, username, message_id, sender):
             fwd('@', stat_bot, message_id, sender)
             report_message_id = message_id
 
+        elif 'Ты задержал' in text:
+            fwd('@', stat_bot, message_id, sender)
+
+        elif 'Ты упустил' in text:
+            fwd('@', stat_bot, message_id, sender)
+
         elif 'Закупка начинается. Отслеживание заказа:' in text:
             buytrade = re.search('обойдется примерно в ([0-9]+)💰', text).group(1)
             gold -= int(buytrade)
@@ -518,10 +512,10 @@ def parse_text(text, username, message_id, sender):
             gold -= 5
 
         elif 'Добро пожаловать на арену!' in text:
-            victory = re.search('Количество побед: (\d+)', text).group(1)
-            arenafight = re.search('Поединков сегодня (\d+) из (\d+)', text)
-            log('Поединков: {0} / {1}. Побед: {2}'.format(arenafight.group(1), arenafight.group(2), victory))
-            if 'Даже драконы не могут драться так часто' in text:
+            # victory = re.search('Количество побед: (\d+)', text).group(1)
+            arenafight = re.search('Поединков сегодня: (\d+)/(\d+)', text)
+            log('Поединков: {0} / {1}.'.format(arenafight.group(1), arenafight.group(2)))
+            if arenafight.group(1) == arenafight.group(2):
                 arena_delay = True
                 arena_delay_day = datetime.now(tz).day
                 log("Отдыхаем денек от арены")
@@ -533,7 +527,7 @@ def parse_text(text, username, message_id, sender):
                 if arena_change_enabled:
                     action_list.append('/on_{0}'.format(arena_item_id))
                 arena_running = True
-                action_list.append('🔎Поиск соперника')
+                action_list.append('▶️Быстрый бой')
                 log('Топаем на арену')
 
         elif 'В казне недостаточно' in text:
@@ -582,10 +576,12 @@ def parse_text(text, username, message_id, sender):
             if re.search('Помощник:', text) is not None:
                 # жевотне обнаружено
                 pet_state = pet_states[re.search('Помощник:\n.+\(.+\) (.+) /pet', text).group(1)]
-            m = re.search('Битва семи замков через (?:(?:(\d+)ч)? ?(?:(\d+) минут)?|несколько секунд)', text)
+            m = re.search('Битва семи замков через (?:(?:(\d+)ч.)? ?(?:(\d+) мин)?|несколько секунд)', text)
+            log(str(m.group(1)))
+            log(str(m.group(2)))
             if not m and re.search('Межсезонье', text):
-                m = re.search('Битва семи замков через (?:(?:(\d+)ч)? ?(?:(\d+) минут)?|несколько секунд)',
-                              'Битва семи замков через 10000ч 100 минут')
+                m = re.search('Битва семи замков через (?:(?:(\d+)ч.)? ?(?:(\d+) мин)?|несколько секунд)',
+                              'Битва семи замков через 10000ч. 100 минут')
             if not m.group(1):
                 if m.group(2) and int(m.group(2)) <= 29:
                     report = True
@@ -626,7 +622,7 @@ def parse_text(text, username, message_id, sender):
                     curhour = datetime.now(tz).hour
                     if not arena_enabled or arena_delay or curhour > 23 or curhour < 8:
                         log('на арену тоже не нужно')
-                        if int(endurancetop) - int(endurance) >= 5:
+                        if int(endurancetop) - int(endurance) >= 8:
                             # минут за 35-45 до битвы имеет смысл выйти из спячки
                             sleeping = time_to_war * 60 - 60 * random.randint(35, 45)
                             log('выносливости мало, можно и подремать до боя {0} минут'.format(int(sleeping / 60)))
@@ -660,14 +656,14 @@ def parse_text(text, username, message_id, sender):
                     action_list.append(orders['les'])
 
                 elif more_enabled and not les_enabled and not peshera_enabled and endurance >= 1 and \
-                        orders['more'] not in action_list:
+                                orders['more'] not in action_list:
                     action_list.append(orders['quests'])
                     action_list.append(orders['more'])
 
                 elif arena_enabled and not arena_delay and gold >= 5 and not arena_running and level >= 5:
                     curhour = datetime.now(tz).hour
                     if 9 <= curhour <= 23:
-                        action_list.append(orders['castle_menu'])
+                        action_list.append(orders['quests'])
                         action_list.append('📯Арена')
                     else:
                         log('По часам не проходим на арену. Сейчас ' + str(curhour) + ' часов')
@@ -675,26 +671,26 @@ def parse_text(text, username, message_id, sender):
                             log('Пойдем строить')
                             action_list.append(orders['castle_menu'])
                             action_list.append(build_target)
-                            #if random.randint(0, 1) == 0:
-                                #action_list.append(build_target)
-                            #else:
-                                #action_list.append('🏘Постройки')
-                                #action_list.append('🚧Стройка')
-                                #action_list.append(build_target)
+                            # if random.randint(0, 1) == 0:
+                            # action_list.append(build_target)
+                            # else:
+                            # action_list.append('🏘Постройки')
+                            # action_list.append('🚧Стройка')
+                            # action_list.append(build_target)
 
                 elif build_enabled and castle_gold > 0 and level >= 10:
                     log('Пойдем строить')
                     action_list.append(orders['castle_menu'])
                     action_list.append(build_target)
-                    #if random.randint(0, 1) == 0:
-                        #action_list.append(build_target)
-                    #else:
-                        #action_list.append(orders['castle_menu'])
-                        #action_list.append('🏘Постройки')
-                        #action_list.append('🚧Стройка')
-                        #action_list.append(build_target)
+                    # if random.randint(0, 1) == 0:
+                    # action_list.append(build_target)
+                    # else:
+                    # action_list.append(orders['castle_menu'])
+                    # action_list.append('🏘Постройки')
+                    # action_list.append('🚧Стройка')
+                    # action_list.append(build_target)
 
-#воюем на арене
+                    # воюем на арене
         elif arena_enabled and text.find('выбери точку атаки и точку защиты') != -1:
             arena_running = True  # на случай, если арена запущена руками
             lt_arena = time()
@@ -711,8 +707,13 @@ def parse_text(text, username, message_id, sender):
                 action_list.append(cover_chosen)
                 action_list.append(attack_chosen)
 
-#победа на арене
-        elif text.find('одержал победу над') != -1 or text.find('Ничья') != -1:
+                # Вернулись с квеста
+        elif text.find('Получено:') != -1:
+            fwd('@', stat_bot, message_id, sender)
+            log('Удачно вернулись с квеста')
+
+        # победа на арене
+        elif text.find('оказался сильнее') != -1 or text.find('Ничья') != -1:
             fwd('@', stat_bot, message_id, sender)
             lt_info = time()
             get_info_diff = random.randint(60, 120)
@@ -721,55 +722,55 @@ def parse_text(text, username, message_id, sender):
             if arena_change_enabled:
                 action_list.append('/on_{0}'.format(non_arena_item_id))
 
-#в квесте встретили моба
+                # в квесте встретили моба
         elif quest_fight_enabled and text.find('/fight') != -1:
             log("Просим помощи у отряда")
             # TODO отключаем, чтоб не злить соклановцев
-            #fwd('@', stat_bot, message_id, sender)
+            # fwd('@', stat_bot, message_id, sender)
             c = re.search('\/fight.*', text).group(0)
             action_list.append(c)
             fwd(pref, msg_receiver, message_id, sender)
 
-#Замок
+        # Замок
         elif text.find("Казна замка:") != -1:
             castle_gold = int(re.search('Казна замка:\n(\d+)', text).group(1))
             log("Голды в замке = {0}".format(castle_gold))
 
-        # else:
-        #     log('WTF MSG ???')
+            # else:
+            #     log('WTF MSG ???')
 
-        # elif username == 'ChatWarsCaptchaBot':
-        #     if len(text) <= 4 and text in captcha_answers.values():
-        #         sleep(3)
-        #         action_list.append(text)
-        #         bot_enabled = True
+            # elif username == 'ChatWarsCaptchaBot':
+            #     if len(text) <= 4 and text in captcha_answers.values():
+            #         sleep(3)
+            #         action_list.append(text)
+            #         bot_enabled = True
 
-    elif username == trade_bot and twinkstock_enabled and secondstock_enabled:
-        if text.find('Твой склад с материалами') != -1:
-            stock_id = message_id
-            fwd('@', stock_bot, stock_id, sender)
-            twinkstock_enabled = False
-            send_msg(pref, msg_receiver, 'Сток обновлен')
+    # elif username == trade_bot and twinkstock_enabled and secondstock_enabled:
+    #    if text.find('Твой склад с материалами') != -1:
+    #        stock_id = message_id
+    #        fwd('@', stock_bot, stock_id, sender)
+    #        twinkstock_enabled = False
+    #        send_msg(pref, msg_receiver, 'Сток обновлен')
 
-    elif username == trade_bot and len(resource_id_list) != 0 and trade_active == False:
-        log('добавляем ресурсы по списку..')
-        trade_active = True
-        for res_id in resource_id_list:
-            if re.search('\/add_' + res_id + ' ', text):
-                count = re.search('/add_' + res_id + '\D+(.*)', text).group(1)
-                send_msg('@', trade_bot, '/add_' + res_id + ' ' + str(count))
-                log('Добавили ' + str(count) + ' шт. ресурса ' + res_id)
-                send_msg(pref, msg_receiver, 'Добавлено ' + str(count) + ' шт. ресурса ' + res_id)
-                sleep_time = random.randint(2, 5)
-                sleep(sleep_time)
-            else:
-                log('На складе нет ресурса ' + res_id)
-                send_msg(pref, msg_receiver, 'На складе нет ресурса ' + res_id)
-        resource_id_list = []
-        send_msg('@', trade_bot, '/done')
-        log('Предложение готово')
-        trade_active = False
-        send_msg(pref, msg_receiver, 'Предложение готово ')
+    # elif username == trade_bot and len(resource_id_list) != 0 and trade_active == False:
+    #    log('добавляем ресурсы по списку..')
+    #    trade_active = True
+    #    for res_id in resource_id_list:
+    #        if re.search('\/add_' + res_id + ' ', text):
+    #            count = re.search('/add_' + res_id + '\D+(.*)', text).group(1)
+    #            send_msg('@', trade_bot, '/add_' + res_id + ' ' + str(count))
+    #            log('Добавили ' + str(count) + ' шт. ресурса ' + res_id)
+    #            send_msg(pref, msg_receiver, 'Добавлено ' + str(count) + ' шт. ресурса ' + res_id)
+    #            sleep_time = random.randint(2, 5)
+    #            sleep(sleep_time)
+    #        else:
+    #            log('На складе нет ресурса ' + res_id)
+    #            send_msg(pref, msg_receiver, 'На складе нет ресурса ' + res_id)
+    #    resource_id_list = []
+    #    send_msg('@', trade_bot, '/done')
+    #    log('Предложение готово')
+    #    trade_active = False
+    #    send_msg(pref, msg_receiver, 'Предложение готово ')
 
     else:
         if quest_fight_enabled and text.find('/fight') != -1 and level >= 15:
@@ -777,20 +778,20 @@ def parse_text(text, username, message_id, sender):
             action_list.append(c)
 
         if bot_enabled and order_enabled and (username in order_usernames or username == admin_username):
-            if text.startswith(orders['red']):
-                update_order(orders['red'])
-            elif text.startswith(orders['black']):
-                update_order(orders['black'])
-            elif text.startswith(orders['white']):
-                update_order(orders['white'])
-            elif text.startswith(orders['yellow']):
-                update_order(orders['yellow'])
-            elif text.startswith(orders['blue']):
-                update_order(orders['blue'])
-            elif text.startswith(orders['mint']):
-                update_order(orders['mint'])
-            elif text.startswith(orders['twilight']):
-                update_order(orders['twilight'])
+            if text.startswith(orders['turtles']):
+                update_order(orders['turtles'])
+            elif text.startswith(orders['klever']):
+                update_order(orders['klever'])
+            elif text.startswith(orders['rock']):
+                update_order(orders['rock'])
+            elif text.startswith(orders['farm']):
+                update_order(orders['farm'])
+            elif text.startswith(orders['fall']):
+                update_order(orders['fall'])
+            elif text.startswith(orders['rose']):
+                update_order(orders['rose'])
+            elif text.startswith(orders['night']):
+                update_order(orders['night'])
             elif text.startswith('🌲'):
                 update_order(orders['lesnoi_fort'])
             elif text.startswith('⛰'):
@@ -799,6 +800,10 @@ def parse_text(text, username, message_id, sender):
                 update_order(orders['morskoi_fort'])
             elif text.startswith('🛡'):
                 update_order(castle)
+            elif text.startswith(orders['attack_symbol']):
+                c = re.search('^[⚔].(..)', text).group(1)
+                update_order(c)
+                # send_msg(pref, msg_receiver, c)
 
         # send_msg(pref, admin_username, 'Получили команду ' + current_order['order'] + ' от ' + username)
         if username == admin_username:
@@ -874,16 +879,16 @@ def parse_text(text, username, message_id, sender):
                 send_msg(pref, msg_receiver, 'Бот успешно выключен')
 
             # отправка стока
-            elif text == '#stock':
-                if level >= 15:
-                    if secondstock_enabled:
-                        twinkstock_enabled = True
-                        send_msg('@', trade_bot, '/start')
-                    else:
-                        send_msg(pref, msg_receiver,
-                                 'Ты просишь меня обновить сток. Но ты даже не включил ни одного стокбота.')
-                else:
-                    send_msg(pref, msg_receiver, 'Я еще не дорос, у меня только ' + str(level) + ' уровень')
+            # elif text == '#stock':
+            #    if level >= 15:
+            #        if secondstock_enabled:
+            #            twinkstock_enabled = True
+            #            send_msg('@', trade_bot, '/start')
+            #        else:
+            #            send_msg(pref, msg_receiver,
+            #                     'Ты просишь меня обновить сток. Но ты даже не включил ни одного стокбота.')
+            #    else:
+            #       send_msg(pref, msg_receiver, 'Я еще не дорос, у меня только ' + str(level) + ' уровень')
 
             # Вкл/выкл арены
             elif text == '#enable_arena':
@@ -1123,12 +1128,12 @@ def parse_text(text, username, message_id, sender):
                 write_config()
                 send_msg(pref, msg_receiver, 'Постройка успешно выключена')
 
-            elif text.startswith('#add'):
-                if level >= 15:
-                    resource_id_list = text.split(' ')[1].split(',')
-                    send_msg('@', trade_bot, '/start')
-                else:
-                    send_msg(pref, msg_receiver, 'Я еще не дорос, у меня только ' + str(level) + ' уровень')
+            # elif text.startswith('#add'):
+            #    if level >= 15:
+            #        resource_id_list = text.split(' ')[1].split(',')
+            #        send_msg('@', trade_bot, '/start')
+            #    else:
+            #        send_msg(pref, msg_receiver, 'Я еще не дорос, у меня только ' + str(level) + ' уровень')
 
             # Вкл/выкл первого стокобота
             # elif text == '#enable_first_stock':
@@ -1171,7 +1176,7 @@ def update_order(order):
         action_list.append(orders['cover'])
     else:
         action_list.append(orders['attack'])
-    action_list.append(order)
+        action_list.append(order)
     # action_list.append(orders['hero'])
 
 
@@ -1183,16 +1188,13 @@ def log(text):
 
 # TODO вынести все определения функций из мейн
 if __name__ == '__main__':
-
     while True:
         try:
             connect(CONFIG['USERNAME'], CONFIG['API_ID'], CONFIG['API_HASH'])
-
             @client.on(events.NewMessage(incoming=True))
             def work_with_messages(msg):
                 global my_username
                 global need2readconfig
-
                 try:
                     if need2readconfig and msg.sender.username == bot_username:
                         print(client.get_me().username)
@@ -1213,14 +1215,11 @@ if __name__ == '__main__':
                 except Exception as err:
                     log('EXCEPTION: {0}'.format(err))
                 raise telethon.events.StopPropagation
-
             _thread.start_new_thread(queue_worker, ())
-
             client.idle()
         except Exception as err:
             log("RECONNECTING!!!")
             sleep(3)
             # client._reconnect()
-
     log('Disconnecting...')
     client.disconnect()
